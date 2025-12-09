@@ -9,6 +9,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 添加编译选项
 add_compile_options(-Wall -Wextra -fvisibility=hidden)
 
+# ==================== Android 16K Page Size Support ====================
+# Add linker flags for 16KB page size alignment (Android 15+)
+# This ensures the native library works on devices with 16KB page sizes
+# https://developer.android.com/guide/practices/page-sizes
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
+
 # 创建共享库
 add_library(fw_native SHARED
     fw_daemon.cpp

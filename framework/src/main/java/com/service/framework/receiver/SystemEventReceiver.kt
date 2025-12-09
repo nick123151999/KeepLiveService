@@ -4,238 +4,55 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.net.ConnectivityManager
-import android.os.Build
+import com.service.framework.Fw
 import com.service.framework.util.FwLog
-import com.service.framework.util.ServiceStarter
 
 /**
- * 系统事件广播接收器
+ * 系统关键事件广播接收器，**专用于静态注册**。
  *
- * 监听各种系统事件来拉活应用
+ * **设计**:
+ * 此 Receiver 被设计为在 `AndroidManifest.xml` 中静态注册，用于捕获那些只有静态注册才能接收到的、对于应用自启动至关重要的系统广播。
+ * - `BOOT_COMPLETED`: 设备开机完成。这是最经典的自启动入口。
+ * - `LOCKED_BOOT_COMPLETED`: 在“直接启动”模式下（设备重启后用户首次解锁前）触发，可以更早地启动服务。
+ * - `MY_PACKAGE_REPLACED`: 应用自身被更新后触发，用于在新版本安装后立即恢复服务。
  *
- * 安全研究要点：
- * - 静态注册的广播可以在应用被杀后唤醒应用
- * - 但强制停止后所有广播都会被禁用
- * - 不同版本的 Android 对广播的限制不同
+ * **唤醒逻辑**:
+ * 监听到上述任何事件后，此 Receiver 的唯一职责是调用 `Fw.check()`，将具体的保活任务交由框架统一处理。
  *
- * Android 版本限制说明：
- * - Android 8.0+: 大部分隐式广播无法静态注册
- * - Android 9.0+: 更多广播受限
- * - 但仍有一些广播可以静态注册（如 BOOT_COMPLETED, MY_PACKAGE_REPLACED 等）
+ * **注意**: 动态注册的广播（如网络变化、屏幕亮灭等）已被移至 [DynamicEventReceiver]，以保持职责分离。
+ *
+ * @author qihao (Pangu-Immortal)
+ * @see DynamicEventReceiver
+ * @since 1.0.0
  */
 class SystemEventReceiver : BroadcastReceiver() {
 
     companion object {
         /**
-         * 获取动态注册的 IntentFilter（用于运行时注册）
-         * 这些广播无法静态注册，必须动态注册
+         * @return 一个包含所有可被此 Receiver 处理的静态广播 Action 的 IntentFilter。
          */
-        fun getDynamicIntentFilter(): IntentFilter {
+        fun getIntentFilter(): IntentFilter {
             return IntentFilter().apply {
-                // 屏幕状态（无法静态注册）
-                addAction(Intent.ACTION_SCREEN_ON)
-                addAction(Intent.ACTION_SCREEN_OFF)
-
-                // 用户解锁（无法静态注册）
-                addAction(Intent.ACTION_USER_PRESENT)
-
-                // 网络变化（Android 7.0+ 无法静态注册）
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    addAction(ConnectivityManager.CONNECTIVITY_ACTION)
-                }
-
-                // 时间相关
-                addAction(Intent.ACTION_TIME_TICK) // 每分钟一次
-                addAction(Intent.ACTION_TIME_CHANGED)
-                addAction(Intent.ACTION_TIMEZONE_CHANGED)
-
-                // 电源相关
-                addAction(Intent.ACTION_POWER_CONNECTED)
-                addAction(Intent.ACTION_POWER_DISCONNECTED)
-                addAction(Intent.ACTION_BATTERY_CHANGED)
-                addAction(Intent.ACTION_BATTERY_LOW)
-                addAction(Intent.ACTION_BATTERY_OKAY)
-
-                // 飞行模式
-                addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
-
-                // 应用相关
-                addAction(Intent.ACTION_PACKAGE_ADDED)
-                addAction(Intent.ACTION_PACKAGE_REMOVED)
-                addAction(Intent.ACTION_PACKAGE_CHANGED)
-                addDataScheme("package")
-
-                // 输入法变化
-                addAction(Intent.ACTION_INPUT_METHOD_CHANGED)
-
-                // 配置变化
-                addAction(Intent.ACTION_CONFIGURATION_CHANGED)
-
-                // 语言变化
-                addAction(Intent.ACTION_LOCALE_CHANGED)
-
-                // 存储相关
-                addAction(Intent.ACTION_DEVICE_STORAGE_LOW)
-                addAction(Intent.ACTION_DEVICE_STORAGE_OK)
-
-                // Home 键相关
-                addAction(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
-
-                // 壁纸变化
-                addAction(Intent.ACTION_WALLPAPER_CHANGED)
+                addAction(Intent.ACTION_BOOT_COMPLETED)
+                addAction(Intent.ACTION_LOCKED_BOOT_COMPLETED)
+                addAction(Intent.ACTION_MY_PACKAGE_REPLACED)
             }
         }
     }
 
-    override fun onReceive(context: Context?, intent: Intent?) {
-        if (context == null || intent == null) return
-
+    override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
-        FwLog.d("SystemEventReceiver 收到广播: $action")
+        var wakeUpReason: String? = null
 
         when (action) {
-            // ==================== 开机相关（可静态注册） ====================
-            Intent.ACTION_BOOT_COMPLETED -> {
-                FwLog.d("设备启动完成")
-                ServiceStarter.startForegroundService(context, "开机启动")
-            }
+            Intent.ACTION_BOOT_COMPLETED -> wakeUpReason = "设备开机完成"
+            Intent.ACTION_LOCKED_BOOT_COMPLETED -> wakeUpReason = "设备锁定启动完成"
+            Intent.ACTION_MY_PACKAGE_REPLACED -> wakeUpReason = "应用版本更新"
+        }
 
-            Intent.ACTION_LOCKED_BOOT_COMPLETED -> {
-                FwLog.d("设备锁定启动完成")
-                ServiceStarter.startForegroundService(context, "锁定启动")
-            }
-
-            // ==================== 屏幕状态 ====================
-            Intent.ACTION_SCREEN_ON -> {
-                FwLog.d("屏幕点亮")
-                ServiceStarter.startForegroundService(context, "屏幕点亮")
-            }
-
-            Intent.ACTION_SCREEN_OFF -> {
-                FwLog.d("屏幕关闭")
-                // 屏幕关闭时也尝试保持服务运行
-                ServiceStarter.startForegroundService(context, "屏幕关闭")
-            }
-
-            // ==================== 用户解锁 ====================
-            Intent.ACTION_USER_PRESENT -> {
-                FwLog.d("用户解锁屏幕")
-                ServiceStarter.startForegroundService(context, "用户解锁")
-            }
-
-            // ==================== 网络变化 ====================
-            ConnectivityManager.CONNECTIVITY_ACTION,
-            "android.net.conn.CONNECTIVITY_CHANGE" -> {
-                FwLog.d("网络状态变化")
-                ServiceStarter.startForegroundService(context, "网络变化")
-            }
-
-            // ==================== 电源相关 ====================
-            Intent.ACTION_POWER_CONNECTED -> {
-                FwLog.d("电源连接")
-                ServiceStarter.startForegroundService(context, "电源连接")
-            }
-
-            Intent.ACTION_POWER_DISCONNECTED -> {
-                FwLog.d("电源断开")
-                ServiceStarter.startForegroundService(context, "电源断开")
-            }
-
-            Intent.ACTION_BATTERY_CHANGED -> {
-                // 电池状态变化（非常频繁，只记录不拉起）
-                FwLog.v("电池状态变化")
-            }
-
-            Intent.ACTION_BATTERY_LOW -> {
-                FwLog.d("电量低")
-                ServiceStarter.startForegroundService(context, "电量低")
-            }
-
-            Intent.ACTION_BATTERY_OKAY -> {
-                FwLog.d("电量恢复正常")
-                ServiceStarter.startForegroundService(context, "电量恢复")
-            }
-
-            // ==================== 时间相关 ====================
-            Intent.ACTION_TIME_TICK -> {
-                // 每分钟一次（太频繁，只记录不拉起）
-                FwLog.v("时间 Tick")
-            }
-
-            Intent.ACTION_TIME_CHANGED -> {
-                FwLog.d("时间设置变化")
-                ServiceStarter.startForegroundService(context, "时间变化")
-            }
-
-            Intent.ACTION_TIMEZONE_CHANGED -> {
-                FwLog.d("时区变化")
-                ServiceStarter.startForegroundService(context, "时区变化")
-            }
-
-            // ==================== 应用相关（可静态注册） ====================
-            Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                FwLog.d("应用已更新")
-                ServiceStarter.startForegroundService(context, "应用更新")
-            }
-
-            Intent.ACTION_PACKAGE_ADDED -> {
-                val packageName = intent.data?.schemeSpecificPart
-                FwLog.d("应用安装: $packageName")
-            }
-
-            Intent.ACTION_PACKAGE_REMOVED -> {
-                val packageName = intent.data?.schemeSpecificPart
-                FwLog.d("应用卸载: $packageName")
-            }
-
-            // ==================== 飞行模式 ====================
-            Intent.ACTION_AIRPLANE_MODE_CHANGED -> {
-                val isEnabled = intent.getBooleanExtra("state", false)
-                FwLog.d("飞行模式: ${if (isEnabled) "开启" else "关闭"}")
-                ServiceStarter.startForegroundService(context, "飞行模式变化")
-            }
-
-            // ==================== Home 键相关 ====================
-            Intent.ACTION_CLOSE_SYSTEM_DIALOGS -> {
-                val reason = intent.getStringExtra("reason")
-                FwLog.d("系统对话框关闭，原因: $reason")
-                // homekey 表示按下了 Home 键
-                if (reason == "homekey" || reason == "recentapps") {
-                    ServiceStarter.startForegroundService(context, "Home键")
-                }
-            }
-
-            // ==================== 其他 ====================
-            Intent.ACTION_LOCALE_CHANGED -> {
-                FwLog.d("语言/区域设置变化")
-                ServiceStarter.startForegroundService(context, "语言变化")
-            }
-
-            Intent.ACTION_CONFIGURATION_CHANGED -> {
-                FwLog.d("配置变化")
-            }
-
-            Intent.ACTION_DEVICE_STORAGE_LOW -> {
-                FwLog.d("存储空间不足")
-            }
-
-            Intent.ACTION_DEVICE_STORAGE_OK -> {
-                FwLog.d("存储空间恢复正常")
-            }
-
-            Intent.ACTION_INPUT_METHOD_CHANGED -> {
-                FwLog.d("输入法变化")
-            }
-
-            Intent.ACTION_WALLPAPER_CHANGED -> {
-                FwLog.d("壁纸变化")
-                ServiceStarter.startForegroundService(context, "壁纸变化")
-            }
-
-            else -> {
-                FwLog.d("收到其他广播: $action")
-            }
+        if (wakeUpReason != null && Fw.isInitialized()) {
+            FwLog.i("System event captured: $wakeUpReason. Triggering keep-alive check.")
+            Fw.check()
         }
     }
 }

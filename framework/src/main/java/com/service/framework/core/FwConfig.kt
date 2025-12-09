@@ -1,344 +1,195 @@
 package com.service.framework.core
 
+import android.app.Activity
+
 /**
- * 保活配置类
+ * Fw保活框架的配置类。
  *
- * 安全研究用途：配置各种保活策略的开关
+ * 通过此类可以精細化控制每项保活策略的开关和参数。
+ * 所有 `enable` 前缀的属性默认为 `true`，除了侵入性较强的 [enableLockScreenActivity] 和 [enableFloatWindow]。
  *
- * 策略分类：
- * 1. 基础策略 - 前台服务、MediaSession、1像素Activity
- * 2. 定时唤醒 - JobScheduler、WorkManager、AlarmManager
- * 3. 账户同步 - AccountManager + SyncAdapter
- * 4. 广播策略 - 蓝牙、USB、NFC、系统事件、媒体挂载
- * 5. 观察者策略 - ContentObserver、FileObserver
- * 6. 进程策略 - 双进程守护、Native守护、Socket保活
+ * 建议使用 [com.service.framework.Fw.init] 的 DSL 写法进行配置。
+ *
+ * @see com.service.framework.Fw
+ * @see Builder
  */
 data class FwConfig(
-    // ==================== 基础策略 ====================
-    /** 是否启用前台服务 */
-    val enableForegroundService: Boolean = true,
+    // region 基础策略
+    val enableForegroundService: Boolean,
+    val enableMediaSession: Boolean,
+    val enableOnePixelActivity: Boolean,
+    // endregion
 
-    /** 是否启用 MediaSession（模拟媒体播放器） */
-    val enableMediaSession: Boolean = true,
+    // region 定时唤醒策略
+    val enableJobScheduler: Boolean,
+    val jobSchedulerInterval: Long,
+    val enableWorkManager: Boolean,
+    val workManagerIntervalMinutes: Long,
+    val enableAlarmManager: Boolean,
+    val alarmManagerInterval: Long,
+    // endregion
 
-    /** 是否启用 1 像素 Activity */
-    val enableOnePixelActivity: Boolean = true,
+    // region 账户同步策略
+    val enableAccountSync: Boolean,
+    val accountType: String,
+    val syncIntervalSeconds: Long,
+    // endregion
 
-    // ==================== 定时唤醒策略 ====================
-    /** 是否启用 JobScheduler */
-    val enableJobScheduler: Boolean = true,
+    // region 广播策略
+    val enableSystemBroadcast: Boolean,
+    val enableBluetoothBroadcast: Boolean,
+    val enableMediaButtonReceiver: Boolean,
+    val enableUsbBroadcast: Boolean,
+    val enableNfcBroadcast: Boolean,
+    val enableMediaMountBroadcast: Boolean,
+    // endregion
 
-    /** JobScheduler 执行间隔（毫秒），最小 15 分钟 */
-    val jobSchedulerInterval: Long = 15 * 60 * 1000L,
+    // region 内容观察者策略
+    val enableMediaContentObserver: Boolean,
+    val enableContactsContentObserver: Boolean,
+    val enableSmsContentObserver: Boolean,
+    val enableSettingsContentObserver: Boolean,
+    val enableFileObserver: Boolean,
+    // endregion
 
-    /** 是否启用 WorkManager */
-    val enableWorkManager: Boolean = true,
+    // region 进程守护策略
+    val enableDualProcess: Boolean,
+    val dualProcessCheckInterval: Long,
+    val enableNativeDaemon: Boolean,
+    val nativeDaemonCheckInterval: Int,
+    val enableNativeSocket: Boolean,
+    val nativeSocketName: String,
+    val nativeSocketHeartbeatInterval: Int,
+    // endregion
 
-    /** WorkManager 执行间隔（分钟），最小 15 分钟 */
-    val workManagerIntervalMinutes: Long = 15L,
+    // region 通知配置
+    val notificationChannelId: String,
+    val notificationChannelName: String,
+    val notificationTitle: String,
+    val notificationContent: String,
+    val notificationIconResId: Int,
+    val notificationActivityClass: Class<out Activity>?,
+    // endregion
 
-    /** 是否启用 AlarmManager */
-    val enableAlarmManager: Boolean = true,
+    // region 日志配置
+    val enableDebugLog: Boolean,
+    val logTag: String,
+    // endregion
 
-    /** AlarmManager 执行间隔（毫秒） */
-    val alarmManagerInterval: Long = 5 * 60 * 1000L,
-
-    // ==================== 账户同步策略 ====================
-    /** 是否启用账户同步 */
-    val enableAccountSync: Boolean = true,
-
-    /** 账户类型 */
-    val accountType: String = "com.service.framework.account",
-
-    /** 同步间隔（秒） */
-    val syncIntervalSeconds: Long = 60L,
-
-    // ==================== 广播策略 ====================
-    /** 是否启用系统广播监听 */
-    val enableSystemBroadcast: Boolean = true,
-
-    /** 是否启用蓝牙广播监听（核心：酷狗音乐的关键） */
-    val enableBluetoothBroadcast: Boolean = true,
-
-    /** 是否启用媒体按键监听 */
-    val enableMediaButtonReceiver: Boolean = true,
-
-    /** 是否启用 USB 设备广播（打印机、U盘、配件等） */
-    val enableUsbBroadcast: Boolean = true,
-
-    /** 是否启用 NFC 广播（标签发现、适配器状态） */
-    val enableNfcBroadcast: Boolean = true,
-
-    /** 是否启用媒体挂载广播（SD卡、U盘挂载） */
-    val enableMediaMountBroadcast: Boolean = true,
-
-    // ==================== 内容观察者策略 ====================
-    /** 是否启用相册变化监听 */
-    val enableMediaContentObserver: Boolean = true,
-
-    /** 是否启用联系人变化监听 */
-    val enableContactsContentObserver: Boolean = true,
-
-    /** 是否启用短信变化监听 */
-    val enableSmsContentObserver: Boolean = true,
-
-    /** 是否启用设置变化监听 */
-    val enableSettingsContentObserver: Boolean = true,
-
-    /** 是否启用文件系统监听（下载、截图、相册目录） */
-    val enableFileObserver: Boolean = true,
-
-    // ==================== 双进程策略 ====================
-    /** 是否启用双进程守护（Java 层） */
-    val enableDualProcess: Boolean = true,
-
-    /** 双进程检查间隔（毫秒） */
-    val dualProcessCheckInterval: Long = 3000L,
-
-    // ==================== Native 层策略 ====================
-    /** 是否启用 Native 守护进程（C++ fork） */
-    val enableNativeDaemon: Boolean = true,
-
-    /** Native 守护进程检查间隔（毫秒） */
-    val nativeDaemonCheckInterval: Int = 3000,
-
-    /** 是否启用 Native Socket 保活通道 */
-    val enableNativeSocket: Boolean = true,
-
-    /** Native Socket 名称 */
-    val nativeSocketName: String = "fw_native_socket",
-
-    /** Native Socket 心跳间隔（毫秒） */
-    val nativeSocketHeartbeatInterval: Int = 5000,
-
-    // ==================== 通知配置 ====================
-    /** 通知渠道 ID */
-    val notificationChannelId: String = "fw_channel",
-
-    /** 通知渠道名称 */
-    val notificationChannelName: String = "保活服务",
-
-    /** 通知标题 */
-    val notificationTitle: String = "服务运行中",
-
-    /** 通知内容 */
-    val notificationContent: String = "点击打开应用",
-
-    /** 通知图标资源 ID */
-    val notificationIconResId: Int = android.R.drawable.ic_media_play,
-
-    /** 点击通知打开的 Activity 类名 */
-    val notificationActivityClass: Class<*>? = null,
-
-    // ==================== 日志配置 ====================
-    /** 是否启用详细日志 */
-    val enableDebugLog: Boolean = true,
-
-    /** 日志 TAG */
-    val logTag: String = "Fw",
-
-    // ==================== 锁屏和悬浮窗策略 ====================
-    /** 是否启用锁屏 Activity（类似墨迹天气的锁屏天气） */
-    val enableLockScreenActivity: Boolean = false,
-
-    /** 是否启用悬浮窗保活（需要 SYSTEM_ALERT_WINDOW 权限） */
-    val enableFloatWindow: Boolean = false,
-
-    /** 悬浮窗类型：true = 1像素隐藏，false = 可见悬浮球 */
-    val floatWindowHidden: Boolean = true
+    // region 高级侵入性策略
+    val enableLockScreenActivity: Boolean,
+    val enableFloatWindow: Boolean,
+    val floatWindowHidden: Boolean
+    // endregion
 ) {
 
+    /**
+     * 用于通过 DSL 方式构建 [FwConfig] 实例的 Builder。
+     *
+     * 使用示例:
+     * ```kotlin
+     * Fw.init(this) {
+     *     notificationTitle = "新的标题"
+     *     enableNativeDaemon = false
+     * }
+     * ```
+     */
     class Builder {
-        private var config = FwConfig()
+        // region 基础策略
+        var enableForegroundService: Boolean = true
+        var enableMediaSession: Boolean = true
+        var enableOnePixelActivity: Boolean = true
+        // endregion
 
-        // ==================== 基础策略 ====================
+        // region 定时唤醒策略
+        var enableJobScheduler: Boolean = true
+        var jobSchedulerInterval: Long = 15 * 60 * 1000L
+        var enableWorkManager: Boolean = true
+        var workManagerIntervalMinutes: Long = 15L
+        var enableAlarmManager: Boolean = true
+        var alarmManagerInterval: Long = 5 * 60 * 1000L
+        // endregion
 
-        fun enableForegroundService(enable: Boolean) = apply {
-            config = config.copy(enableForegroundService = enable)
-        }
+        // region 账户同步策略
+        var enableAccountSync: Boolean = true
+        var accountType: String = "com.service.framework.account"
+        var syncIntervalSeconds: Long = 60L
+        // endregion
 
-        fun enableMediaSession(enable: Boolean) = apply {
-            config = config.copy(enableMediaSession = enable)
-        }
+        // region 广播策略
+        var enableSystemBroadcast: Boolean = true
+        var enableBluetoothBroadcast: Boolean = true
+        var enableMediaButtonReceiver: Boolean = true
+        var enableUsbBroadcast: Boolean = true
+        var enableNfcBroadcast: Boolean = true
+        var enableMediaMountBroadcast: Boolean = true
+        // endregion
 
-        fun enableOnePixelActivity(enable: Boolean) = apply {
-            config = config.copy(enableOnePixelActivity = enable)
-        }
+        // region 内容观察者策略
+        var enableMediaContentObserver: Boolean = true
+        var enableContactsContentObserver: Boolean = true
+        var enableSmsContentObserver: Boolean = true
+        var enableSettingsContentObserver: Boolean = true
+        var enableFileObserver: Boolean = true
+        // endregion
 
-        // ==================== 定时唤醒策略 ====================
+        // region 进程守护策略
+        var enableDualProcess: Boolean = true
+        var dualProcessCheckInterval: Long = 3000L
+        var enableNativeDaemon: Boolean = true
+        var nativeDaemonCheckInterval: Int = 3000
+        var enableNativeSocket: Boolean = true
+        var nativeSocketName: String = "fw_native_socket"
+        var nativeSocketHeartbeatInterval: Int = 5000
+        // endregion
 
-        fun enableJobScheduler(enable: Boolean) = apply {
-            config = config.copy(enableJobScheduler = enable)
-        }
+        // region 通知配置
+        var notificationChannelId: String = "fw_channel"
+        var notificationChannelName: String = "保活服务"
+        var notificationTitle: String = "服务运行中"
+        var notificationContent: String = "点击打开应用"
+        var notificationIconResId: Int = android.R.drawable.ic_media_play
+        var notificationActivityClass: Class<out Activity>? = null
+        // endregion
 
-        fun jobSchedulerInterval(intervalMs: Long) = apply {
-            config = config.copy(jobSchedulerInterval = intervalMs)
-        }
+        // region 日志配置
+        var enableDebugLog: Boolean = true
+        var logTag: String = "Fw"
+        // endregion
 
-        fun enableWorkManager(enable: Boolean) = apply {
-            config = config.copy(enableWorkManager = enable)
-        }
+        // region 高级侵入性策略
+        var enableLockScreenActivity: Boolean = false // 默认关闭
+        var enableFloatWindow: Boolean = false        // 默认关闭
+        var floatWindowHidden: Boolean = true
+        // endregion
 
-        fun workManagerIntervalMinutes(minutes: Long) = apply {
-            config = config.copy(workManagerIntervalMinutes = minutes)
-        }
-
-        fun enableAlarmManager(enable: Boolean) = apply {
-            config = config.copy(enableAlarmManager = enable)
-        }
-
-        fun alarmManagerInterval(intervalMs: Long) = apply {
-            config = config.copy(alarmManagerInterval = intervalMs)
-        }
-
-        // ==================== 账户同步策略 ====================
-
-        fun enableAccountSync(enable: Boolean) = apply {
-            config = config.copy(enableAccountSync = enable)
-        }
-
-        fun accountType(type: String) = apply {
-            config = config.copy(accountType = type)
-        }
-
-        fun syncIntervalSeconds(seconds: Long) = apply {
-            config = config.copy(syncIntervalSeconds = seconds)
-        }
-
-        // ==================== 广播策略 ====================
-
-        fun enableSystemBroadcast(enable: Boolean) = apply {
-            config = config.copy(enableSystemBroadcast = enable)
-        }
-
-        fun enableBluetoothBroadcast(enable: Boolean) = apply {
-            config = config.copy(enableBluetoothBroadcast = enable)
-        }
-
-        fun enableMediaButtonReceiver(enable: Boolean) = apply {
-            config = config.copy(enableMediaButtonReceiver = enable)
-        }
-
-        fun enableUsbBroadcast(enable: Boolean) = apply {
-            config = config.copy(enableUsbBroadcast = enable)
-        }
-
-        fun enableNfcBroadcast(enable: Boolean) = apply {
-            config = config.copy(enableNfcBroadcast = enable)
-        }
-
-        fun enableMediaMountBroadcast(enable: Boolean) = apply {
-            config = config.copy(enableMediaMountBroadcast = enable)
-        }
-
-        // ==================== 内容观察者策略 ====================
-
-        fun enableMediaContentObserver(enable: Boolean) = apply {
-            config = config.copy(enableMediaContentObserver = enable)
-        }
-
-        fun enableContactsContentObserver(enable: Boolean) = apply {
-            config = config.copy(enableContactsContentObserver = enable)
-        }
-
-        fun enableSmsContentObserver(enable: Boolean) = apply {
-            config = config.copy(enableSmsContentObserver = enable)
-        }
-
-        fun enableSettingsContentObserver(enable: Boolean) = apply {
-            config = config.copy(enableSettingsContentObserver = enable)
-        }
-
-        fun enableFileObserver(enable: Boolean) = apply {
-            config = config.copy(enableFileObserver = enable)
-        }
-
-        // ==================== 双进程策略 ====================
-
-        fun enableDualProcess(enable: Boolean) = apply {
-            config = config.copy(enableDualProcess = enable)
-        }
-
-        fun dualProcessCheckInterval(intervalMs: Long) = apply {
-            config = config.copy(dualProcessCheckInterval = intervalMs)
-        }
-
-        // ==================== Native 层策略 ====================
-
-        fun enableNativeDaemon(enable: Boolean) = apply {
-            config = config.copy(enableNativeDaemon = enable)
-        }
-
-        fun nativeDaemonCheckInterval(intervalMs: Int) = apply {
-            config = config.copy(nativeDaemonCheckInterval = intervalMs)
-        }
-
-        fun enableNativeSocket(enable: Boolean) = apply {
-            config = config.copy(enableNativeSocket = enable)
-        }
-
-        fun nativeSocketName(name: String) = apply {
-            config = config.copy(nativeSocketName = name)
-        }
-
-        fun nativeSocketHeartbeatInterval(intervalMs: Int) = apply {
-            config = config.copy(nativeSocketHeartbeatInterval = intervalMs)
-        }
-
-        // ==================== 通知配置 ====================
-
-        fun notificationChannelId(id: String) = apply {
-            config = config.copy(notificationChannelId = id)
-        }
-
-        fun notificationChannelName(name: String) = apply {
-            config = config.copy(notificationChannelName = name)
-        }
-
-        fun notificationTitle(title: String) = apply {
-            config = config.copy(notificationTitle = title)
-        }
-
-        fun notificationContent(content: String) = apply {
-            config = config.copy(notificationContent = content)
-        }
-
-        fun notificationIcon(resId: Int) = apply {
-            config = config.copy(notificationIconResId = resId)
-        }
-
-        fun notificationActivityClass(clazz: Class<*>) = apply {
-            config = config.copy(notificationActivityClass = clazz)
-        }
-
-        // ==================== 日志配置 ====================
-
-        fun enableDebugLog(enable: Boolean) = apply {
-            config = config.copy(enableDebugLog = enable)
-        }
-
-        fun logTag(tag: String) = apply {
-            config = config.copy(logTag = tag)
-        }
-
-        // ==================== 锁屏和悬浮窗策略 ====================
-
-        fun enableLockScreenActivity(enable: Boolean) = apply {
-            config = config.copy(enableLockScreenActivity = enable)
-        }
-
-        fun enableFloatWindow(enable: Boolean) = apply {
-            config = config.copy(enableFloatWindow = enable)
-        }
-
-        fun floatWindowHidden(hidden: Boolean) = apply {
-            config = config.copy(floatWindowHidden = hidden)
-        }
-
-        fun build(): FwConfig = config
-    }
-
-    companion object {
-        fun builder() = Builder()
+        /**
+         * 构建一个不可变的 [FwConfig] 实例。
+         */
+        fun build(): FwConfig = FwConfig(
+            // 基础策略
+            enableForegroundService, enableMediaSession, enableOnePixelActivity,
+            // 定时唤醒策略
+            enableJobScheduler, jobSchedulerInterval, enableWorkManager, workManagerIntervalMinutes,
+            enableAlarmManager, alarmManagerInterval,
+            // 账户同步策略
+            enableAccountSync, accountType, syncIntervalSeconds,
+            // 广播策略
+            enableSystemBroadcast, enableBluetoothBroadcast, enableMediaButtonReceiver, enableUsbBroadcast,
+            enableNfcBroadcast, enableMediaMountBroadcast,
+            // 内容观察者策略
+            enableMediaContentObserver, enableContactsContentObserver, enableSmsContentObserver,
+            enableSettingsContentObserver, enableFileObserver,
+            // 进程守护策略
+            enableDualProcess, dualProcessCheckInterval, enableNativeDaemon, nativeDaemonCheckInterval,
+            enableNativeSocket, nativeSocketName, nativeSocketHeartbeatInterval,
+            // 通知配置
+            notificationChannelId, notificationChannelName, notificationTitle, notificationContent,
+            notificationIconResId, notificationActivityClass,
+            // 日志配置
+            enableDebugLog, logTag,
+            // 高级侵入性策略
+            enableLockScreenActivity, enableFloatWindow, floatWindowHidden
+        )
     }
 }

@@ -4,8 +4,18 @@
 [![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](https://developer.android.com)
 [![API](https://img.shields.io/badge/API-24%2B-brightgreen.svg)](https://android-arsenal.com/api?level=24)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple.svg)](https://kotlinlang.org)
+[![16K Page Size](https://img.shields.io/badge/16K%20Page%20Size-Compatible-orange.svg)](https://developer.android.com/guide/practices/page-sizes)
+[![Google Play](https://img.shields.io/badge/Google%20Play-Ready-success.svg)](https://developer.android.com/distribute/best-practices/develop/64-bit)
 
 > 安全研究用途：完整复现市面上所有的保活机制，穷尽展示所有保活手段，适配所有的主流机型和 ROM。
+
+## 项目亮点
+
+- **🆕 适配 Google Play 最新要求** - 完全兼容 2024 年 Google Play 商店的所有技术要求
+- **📱 Android 16K 页面大小支持** - 原生代码已适配 16KB 页面对齐，兼容 Android 15+ 的 16K 页面设备
+- **🔧 最新开发工具链** - 使用 AGP 8.13.1、Kotlin 2.0.21、JDK 21、NDK 27 等最新稳定版开发
+- **📦 64 位架构全覆盖** - 支持 arm64-v8a、armeabi-v7a、x86_64、x86 四种架构
+- **🛡️ 生产级代码质量** - 通过 Lint 检查、ProGuard 混淆优化，可直接上架应用商店
 
 ## 项目简介
 
@@ -188,7 +198,7 @@ VendorIntegrationAnalyzer.getFullAnalysisReport(context, "com.moji.mjweather")
 
 ### 原理
 
-厂商推送服务（小米推送、华为推送等）是系统级常驻服务，即使应用被杀，推送到达时也会拉起应用。
+厂商推送服务（小米推送、华为推送、FCM 等）是系统级常驻服务，即使应用被杀，推送到达时也会拉起应用。
 
 ### 集成方式
 
@@ -206,6 +216,9 @@ implementation("com.heytap.msp:push:3.1.0")
 // vivo 推送
 implementation("com.vivo.push:vivo-push:3.0.0.6")
 
+// Google FCM
+implementation("com.google.firebase:firebase-messaging-ktx:23.4.0")
+
 // 2. 在应用中注册推送
 class MyApp : Application() {
     override fun onCreate() {
@@ -220,6 +233,10 @@ class MyApp : Application() {
             isEmui() -> HmsMessaging.getInstance(this).isAutoInitEnabled = true
             isColorOS() -> HeytapPushManager.init(this, true)
             isFuntouchOS() -> PushClient.getInstance(this).initialize()
+            else -> {
+                // 对于原生、Google、传音等其他设备，统一使用 FCM
+                Firebase.messaging.isAutoInitEnabled = true
+            }
         }
     }
 }
@@ -233,20 +250,74 @@ class MyApp : Application() {
 | 华为 | HMS Push | `com.huawei.hms.push` |
 | OPPO | OPPO Push | `com.heytap.msp` |
 | vivo | vivo Push | `com.vivo.push` |
+| Google | FCM | `com.google.firebase.messaging` |
 | 魅族 | Flyme Push | `com.meizu.cloud.pushsdk` |
 | 个推 | GeTui | `com.igexin.sdk` |
 | 极光 | JPush | `cn.jpush.android` |
 
-### 使用分析工具
+### FCM 数据消息 (Data Message) 模式建议
 
-```kotlin
-// 分析目标应用集成了哪些推送 SDK
-val report = VendorIntegrationAnalyzer.getFullAnalysisReport(
-    context,
-    "com.moji.mjweather"  // 墨迹天气包名
-)
-Log.d("Analysis", report)
-```
+对于通过 FCM (Firebase Cloud Messaging) 进行推送，强烈建议使用 **数据消息 (Data Message)** 而不是通知消息 (Notification Message)。
+
+| 类型 | `notification` 消息 | `data` 消息 |
+|---|---|---|
+| **优点** | 简单，由系统自动处理通知显示。 | 灵活性高，应用完全控制消息处理和通知显示。 |
+| **缺点** | 应用在后台时，消息由系统处理，无法自定义，**可能不会唤醒应用**。 | 需要应用自己实现 `FirebaseMessagingService` 来接收和处理消息。 |
+| **唤醒能力** | 弱（后台时由系统决定） | **强（应用在后台或被杀时，可以高优先级唤醒应用并执行代码）** |
+
+**为什么使用 `data` 消息？**
+
+为了确保后台唤醒的可靠性，`data` 消息是必须的。当应用收到 `data` 消息时，`onMessageReceived` 回调会被触发，即使应用在后台。这给了我们执行代码、启动服务、弹出自定义通知的机会，从而实现可靠的保活。
+
+**实现示例:**
+
+1.  **在 `AndroidManifest.xml` 中注册服务:**
+    ```xml
+    <service
+        android:name=".MyFirebaseMessagingService"
+        android:exported="false">
+        <intent-filter>
+            <action android:name="com.google.firebase.MESSAGING_EVENT" />
+        </intent-filter>
+    </service>
+    ```
+
+2.  **实现 `FirebaseMessagingService`:**
+    ```kotlin
+    class MyFirebaseMessagingService : FirebaseMessagingService() {
+        override fun onMessageReceived(remoteMessage: RemoteMessage) {
+            // 收到数据消息
+            FwLog.d("FCM", "From: ${remoteMessage.from}")
+
+            // 检查消息中是否包含 data payload
+            remoteMessage.data.isNotEmpty().let {
+                FwLog.d("FCM", "Message data payload: " + remoteMessage.data)
+
+                // 在这里执行唤醒逻辑
+                // 例如：启动一个前台服务
+                Fw.check()
+            }
+        }
+    }
+    ```
+
+3.  **服务端发送 `data` 消息 (JSON 格式):**
+    ```json
+    {
+      "to": "DEVICE_TOKEN",
+      "priority": "high",
+      "data": {
+        "title": "后台任务",
+        "body": "正在执行后台任务...",
+        "action": "KEEP_ALIVE_CHECK"
+      }
+    }
+    ```
+    **关键点:**
+    - `priority` 设置为 `high`，以获得最及时的传递（即使在 Doze 模式下）。
+    - 消息体中只包含 `data` 字段，不包含 `notification` 字段。
+
+通过这种方式，FCM 就不再仅仅是一个通知通道，而是一个强大的后台唤醒工具。
 
 ---
 
@@ -407,8 +478,32 @@ KeepLiveService/
 | 12+ | 31+   | `BLUETOOTH_CONNECT` 运行时权限，精确闹钟权限 |
 | 13+ | 33+   | `POST_NOTIFICATIONS` 运行时权限 |
 | 14+ | 34+   | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` 权限 |
-| 15+ | 35+   | 更严格的后台限制 |
+| 15+ | 35+   | 更严格的后台限制，**16KB 页面大小设备支持** |
 | 16 | 36.1  | 最新 API |
+
+### Android 16K 页面大小适配
+
+从 Android 15 开始，部分设备使用 16KB 页面大小（而非传统的 4KB）。本项目已完成 16K 适配：
+
+**适配方式：**
+
+1. **CMake 链接选项** - 在 `CMakeLists.txt` 中添加：
+
+   ```cmake
+   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
+   ```
+
+2. **ELF 段对齐** - 编译后的 Native 库 LOAD 段对齐值为 `0x4000` (16384 = 16KB)
+
+**验证方法：**
+
+```bash
+# 使用 NDK 的 llvm-readelf 检查 ELF 对齐
+llvm-readelf -l libfw_native.so | grep LOAD
+# 输出应显示对齐值为 0x4000
+```
+
+**参考文档：** [Support 16 KB page sizes](https://developer.android.com/guide/practices/page-sizes)
 
 ---
 
@@ -421,6 +516,8 @@ KeepLiveService/
 | OPPO (ColorOS) | 后台冻结 | 引导用户添加省电白名单 |
 | vivo (Funtouch) | i管家限制 | 引导用户开启后台运行权限 |
 | 三星 (OneUI) | 设备维护优化 | 相对宽松 |
+| Google (Pixel) | Doze 模式严格 | 请求 `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`，使用高优先级 FCM 消息。 |
+| 传音 (Tecno) | 后台管理类似原生，但有内存清理 | 引导用户锁定应用，加入自启动列表。 |
 
 ### 厂商自启动设置入口
 

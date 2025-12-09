@@ -55,7 +55,9 @@
 
     <!-- 闹钟权限 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- USE_EXACT_ALARM 仅在 API 33+ 可用，低版本会自动忽略 -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"
+        tools:ignore="ExactAlarm" />
 
     <!-- 开机广播权限 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

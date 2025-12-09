@@ -1,185 +1,149 @@
 package com.service.framework.service
 
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.IBinder
-import android.os.Process
 import androidx.core.app.NotificationCompat
+import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
 import com.service.framework.Fw
 import com.service.framework.util.FwLog
 import com.service.framework.util.ServiceStarter
-import java.util.Timer
-import java.util.TimerTask
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
- * 守护进程服务（运行在独立进程）
+ * 守护进程服务，运行于独立的 `:daemon` 进程中。
  *
- * 核心机制：
- * 1. 运行在 :daemon 进程
- * 2. 定时检查主进程是否存活
- * 3. 主进程死亡时唤醒主进程
- * 4. 与主进程互相守护
+ * **核心机制**：
+ * 1.  **独立进程**: 在 `AndroidManifest.xml` 中通过 `android:process=":daemon"` 实现，与主进程隔离。
+ * 2.  **双向守护**: 此服务监控主进程，主进程的 `FwForegroundService` 也通过 `startService` 保证此服务的运行。
+ * 3.  **协程定时检查**: 使用 `lifecycleScope` 启动一个轻量级的协程，周期性地检查主进程是否存活。
+ * 4.  **进程存活判断**: 通过遍历 `ActivityManager.getRunningAppProcesses()` 来判断主进程（包名同名进程）是否在运行，此方法比废弃的 `getRunningServices` 更可靠。
+ * 5.  **自动拉起**: 如果检测到主进程死亡，会立即调用 [ServiceStarter] 尝试拉起主进程的 [FwForegroundService]。
  *
- * 安全研究要点：
- * - 双进程守护是常见的保活手段
- * - 利用两个进程互相监控，一个死亡另一个立即拉起
- * - 可以通过检测进程是否存在或通过 AIDL/Socket 通信
+ * **生命周期**：
+ * - `onCreate()`: 提升为前台服务，并启动监控协程。
+ * - `onDestroy()`: 协程自动取消，并尝试最后一次拉起主服务，形成闭环。
+ *
+ * @author qihao (Pangu-Immortal)
+ * @since 1.0.0
  */
-class DaemonService : Service() {
+class DaemonService : LifecycleService() {
+
+    private var monitoringJob: Job? = null
 
     companion object {
         private const val NOTIFICATION_ID = 10002
-        private const val CHECK_INTERVAL = 3000L // 3秒检查一次
+        private const val CHANNEL_ID = "fw_daemon_channel"
     }
-
-    private var checkTimer: Timer? = null
 
     override fun onCreate() {
         super.onCreate()
-        FwLog.d("DaemonService onCreate, PID: ${Process.myPid()}")
+        FwLog.d("DaemonService initializing in PID: ${android.os.Process.myPid()}")
 
-        // 启动前台通知
         startForegroundWithNotification()
-
-        // 启动定时检查
-        startCheckTimer()
+        startMonitoringJob()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        FwLog.d("DaemonService onStartCommand")
+        super.onStartCommand(intent, flags, startId)
+        FwLog.d("DaemonService received start command.")
         return START_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
-
     override fun onDestroy() {
         super.onDestroy()
-        FwLog.d("DaemonService onDestroy")
-
-        // 停止定时器
-        checkTimer?.cancel()
-        checkTimer = null
-
-        // 尝试拉起主服务
-        tryStartMainService()
-
-        // 尝试重启自己
-        tryRestartSelf()
+        // lifecycleScope 会自动取消 monitoringJob，无需手动停止
+        FwLog.w("DaemonService is being destroyed. It will attempt to restart the main service.")
+        // 作为最后的保障，在自身被销毁时尝试拉起主服务
+        ServiceStarter.startForegroundService(this, "守护进程被杀后拉起")
     }
 
-    /**
-     * 启动前台通知
-     */
     private fun startForegroundWithNotification() {
-        val channelId = "fw_daemon_channel"
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channel = NotificationChannel(
-                channelId,
-                "守护服务",
-                NotificationManager.IMPORTANCE_MIN
-            ).apply {
-                description = "后台守护服务"
-                setShowBadge(false)
-                enableLights(false)
-                enableVibration(false)
-                setSound(null, null)
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("守护服务")
-            .setContentText("正在运行...")
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setOngoing(true)
-            .build()
-
+        createNotificationChannel()
+        val notification = buildNotification()
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
-            FwLog.e("DaemonService 启动前台服务失败: ${e.message}", e)
+            FwLog.e("DaemonService failed to start foreground", e)
         }
     }
 
-    /**
-     * 启动定时检查
-     */
-    private fun startCheckTimer() {
-        checkTimer?.cancel()
-        checkTimer = Timer().apply {
-            schedule(object : TimerTask() {
-                override fun run() {
-                    checkAndRestartMainService()
-                }
-            }, CHECK_INTERVAL, CHECK_INTERVAL)
-        }
-    }
-
-    /**
-     * 检查并重启主服务
-     */
-    private fun checkAndRestartMainService() {
-        try {
-            if (!isMainServiceRunning()) {
-                FwLog.d("检测到主服务未运行，尝试拉起")
-                tryStartMainService()
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "守护服务", // 对于库模块，硬编码是可接受的
+                NotificationManager.IMPORTANCE_MIN
+            ).apply {
+                description = "用于跨进程守护主服务"
+                setShowBadge(false)
             }
-        } catch (e: Exception) {
-            FwLog.e("检查主服务状态失败: ${e.message}", e)
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
         }
     }
 
-    /**
-     * 检查主服务是否运行
-     */
-    private fun isMainServiceRunning(): Boolean {
-        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-        val runningServices = activityManager?.getRunningServices(Int.MAX_VALUE) ?: return false
-
-        val mainServiceName = FwForegroundService::class.java.name
-        return runningServices.any { it.service.className == mainServiceName }
+    private fun buildNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("守护服务")
+            .setContentText("正在保护应用运行")
+            .setSmallIcon(android.R.drawable.ic_menu_compass) // 使用一个不同的图标以作区分
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .build()
     }
 
     /**
-     * 尝试启动主服务
+     * 启动一个周期性监控任务，使用协程实现。
      */
-    private fun tryStartMainService() {
-        try {
-            ServiceStarter.startForegroundService(applicationContext, "守护进程拉起")
-        } catch (e: Exception) {
-            FwLog.e("拉起主服务失败: ${e.message}", e)
-        }
-    }
+    private fun startMonitoringJob() {
+        if (monitoringJob?.isActive == true) return
 
-    /**
-     * 尝试重启自己
-     */
-    private fun tryRestartSelf() {
-        try {
-            val intent = Intent(applicationContext, DaemonService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                applicationContext.startForegroundService(intent)
-            } else {
-                applicationContext.startService(intent)
+        monitoringJob = lifecycleScope.launch {
+            FwLog.d("Starting main process monitoring job.")
+            while (isActive) {
+                delay(Fw.config.dualProcessCheckInterval)
+                checkAndRestartMainProcess()
             }
-        } catch (e: Exception) {
-            FwLog.e("重启守护服务失败: ${e.message}", e)
         }
     }
+
+    /**
+     * 检查主进程是否存活，如果不在则尝试拉起。
+     */
+    private fun checkAndRestartMainProcess() {
+        if (!isMainProcessAlive()) {
+            FwLog.w("Main process is not running. Attempting to restart it...")
+            ServiceStarter.startForegroundService(this, "守护进程拉起")
+        } else {
+            FwLog.d("Main process is alive.")
+        }
+    }
+
+    /**
+     * 通过检查正在运行的进程列表来判断主进程是否存活。
+     * @return 如果主进程正在运行，返回 `true`。
+     */
+    private fun isMainProcessAlive(): Boolean {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val mainProcessName = applicationInfo.packageName
+
+        // getRunningAppProcesses 在较新系统上可能只返回当前应用自己的进程，但这正是我们需要的
+        return am.runningAppProcesses.orEmpty().any { it.processName == mainProcessName }
+    }
+
+    // onBind 不是必须的，但因为是 LifecycleService，所以保留
+    override fun onBind(intent: Intent) = super.onBind(intent)
 }
