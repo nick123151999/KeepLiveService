@@ -17,3 +17,16 @@ local.properties
 /.idea/
 /.kotlin/
 /framework/build/
+
+# Keystore files
+*.jks
+*.keystore
+
+# Build outputs - APK, AAB, etc.
+*.apk
+*.aab
+*.ap_
+*.dex
+/release/
+/app/release/
+/app/debug/

@@ -1,0 +1,173 @@
+{
+    "java.configuration.updateBuildConfiguration": "automatic",
+    // ================================
+    // Dart 格式化设置
+    // ================================
+    "[dart]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "editor.rulers": [
+            100
+        ],
+        "editor.selectionHighlight": false,
+        "editor.suggest.snippetsPreventQuickSuggestions": false,
+        "editor.suggestSelection": "first",
+        "editor.tabCompletion": "onlySnippets",
+        "editor.wordBasedSuggestions": "off"
+    },
+    // Dart 代码风格
+    "dart.lineLength": 100,
+    "dart.enableSdkFormatter": true,
+    "dart.insertArgumentPlaceholders": false,
+    // ================================
+    // 文件排除（提高性能）
+    // ================================
+    "files.exclude": {
+        "**/.dart_tool": true,
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/build": true,
+        "**/*.g.dart": true
+    },
+    "files.watcherExclude": {
+        "**/.dart_tool/**": true,
+        "**/build/**": true,
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/**": true
+    },
+    // 自动保存
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 1000,
+    // ================================
+    // VS Code 主题设置（完全还原）
+    // ================================
+    // 颜色主题
+    "workbench.colorTheme": "Default Dark+",
+    // 图标主题（如果没安装就留空）
+    "workbench.iconTheme": "vs-seti",
+    // ================================
+    // 字体设置（VS Code 默认）
+    // ================================
+    "editor.fontFamily": "Menlo, Monaco, 'Courier New', monospace",
+    "editor.fontSize": 13,
+    "editor.fontWeight": "normal",
+    "editor.lineHeight": 0,
+    "editor.letterSpacing": 0,
+    // ================================
+    // 编辑器外观（VS Code 默认）
+    // ================================
+    "editor.minimap.enabled": true,
+    "editor.renderWhitespace": "selection",
+    "editor.cursorBlinking": "blink",
+    "editor.cursorStyle": "line",
+    "editor.smoothScrolling": false,
+    "editor.lineNumbers": "on",
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "editor.renderLineHighlight": "line",
+    "editor.occurrencesHighlight": "singleFile",
+    // ================================
+    // 工作区外观（VS Code 默认）
+    // ================================
+    "workbench.startupEditor": "welcomePage",
+    "workbench.editor.enablePreview": false,
+    "workbench.editor.showTabs": "multiple",
+    "workbench.editor.tabSizing": "fit",
+    "workbench.tree.indent": 8,
+    "workbench.activityBar.location": "default",
+    "workbench.sideBar.location": "left",
+    // ================================
+    // 终端设置（VS Code 默认）
+    // ================================
+    "terminal.integrated.fontSize": 12,
+    "terminal.integrated.fontFamily": "Menlo, Monaco, 'Courier New', monospace",
+    "terminal.integrated.cursorBlinking": false,
+    "terminal.integrated.cursorStyle": "block",
+    "terminal.integrated.smoothScrolling": false,
+    // ================================
+    // 其他 UI 设置
+    // ================================
+    "window.zoomLevel": 0,
+    "breadcrumbs.enabled": true,
+    "debug.console.fontSize": 12,
+    // ================================
+    // Markdown 设置 (Cursor/VS Code)
+    // ================================
+    "markdown.preview.fontSize": 14,
+    "markdown.preview.breaks": true,
+    "markdown.preview.linkify": true,
+    "markdown.preview.typographer": false,
+    "markdown.preview.openMarkdownLinks": "inPreview",
+    "markdown.preview.scrollPreviewWithEditor": true,
+    "markdown.preview.scrollEditorWithPreview": true,
+    "markdown.extension.toc.updateOnSave": true,
+    "markdown.extension.preview.autoShowPreviewToSide": false,
+    // Cursor 特定设置
+    "markdown.preview.enhanced.enableScriptExecution": false,
+    "markdown.preview.enhanced.enableTypographer": false,
+    // 强制启用 Markdown 预览
+    "markdown.preview.doubleClickToSwitchToEditor": true,
+    "markdown.preview.markEditorSelection": true,
+    "[markdown]": {
+        "editor.wordWrap": "on",
+        "editor.quickSuggestions": {
+            "comments": "off",
+            "strings": "off",
+            "other": "off"
+        },
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "yzhang.markdown-all-in-one",
+        "editor.tabSize": 2,
+        "editor.renderWhitespace": "none"
+    },
+    // 文件关联
+    "files.associations": {
+        "*.md": "markdown",
+        "*.markdown": "markdown"
+    },
+    "editor.suggestFontSize": 0,
+    "editor.suggestLineHeight": 0,
+    "editor.hover.enabled": "on",
+    "editor.hover.delay": 300,
+    // ================================
+    // 不使用自定义颜色，让主题自然生效
+    // ================================
+    "workbench.colorCustomizations": {},
+    "editor.tokenColorCustomizations": {},
+    // ================================
+    // 强制启用编辑功能（关键设置 - 完全匹配 VS Code）
+    // ================================
+    "editor.readOnly": false,
+    "workbench.editor.readonly": false,
+    "files.readonlyInclude": {},
+    "files.readonlyExclude": {
+        "**/*": true
+    },
+    "editor.accessibilitySupport": "off",
+    // ================================
+    // 编辑器行为（VS Code 默认）
+    // ================================
+    "editor.cursorSmoothCaretAnimation": "off",
+    // ================================
+    // 代码建议和补全（VS Code 默认）
+    // ================================
+    "editor.acceptSuggestionOnCommitCharacter": true,
+    "editor.acceptSuggestionOnEnter": "on",
+    "editor.suggestSelection": "first",
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+    "editor.tabCompletion": "onlySnippets",
+    "editor.wordBasedSuggestions": "off",
+    "editor.quickSuggestions": {
+        "other": "on",
+        "comments": "off",
+        "strings": "off"
+    },
+    // ================================
+    // 禁用可能干扰编辑的功能
+    // ================================
+    "vim.handleKeys": {}
+}

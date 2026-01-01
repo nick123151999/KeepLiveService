@@ -54,6 +54,16 @@ android {
         buildConfigField("String", "PROJECT_DESC", "\"Android Keep-Alive Security Research Framework\"")
     }
 
+    // 签名配置
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("release-keystore.jks")
+            storePassword = "keepalive2025"
+            keyAlias = "release-key"
+            keyPassword = "keepalive2025"
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
@@ -75,8 +85,8 @@ android {
                 "proguard-rules.pro"
             )
 
-            // 使用 debug 签名以便于测试
-            signingConfig = signingConfigs.getByName("debug")
+            // 使用正式签名
+            signingConfig = signingConfigs.getByName("release")
 
             // Release 构建信息
             buildConfigField("boolean", "ENABLE_VERBOSE_LOG", "false")
